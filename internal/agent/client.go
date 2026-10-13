@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 type Config struct {
 	Panel     string `json:"panel"`
@@ -34,9 +34,10 @@ type Receipt struct {
 	Error     string `json:"error"`
 }
 type Report struct {
-	Version  string    `json:"version"`
-	Revision int64     `json:"revision"`
-	Results  []Receipt `json:"results"`
+	Version   string     `json:"version"`
+	Revision  int64      `json:"revision"`
+	Results   []Receipt  `json:"results"`
+	Telemetry *Telemetry `json:"telemetry,omitempty"`
 }
 type Client struct {
 	Config  Config
@@ -199,5 +200,7 @@ func (c *Client) Tick(ctx context.Context) error {
 	if e != nil {
 		return e
 	}
+	// An unavailable inventory must not interrupt GRE reconciliation or heartbeats.
+	r.Telemetry, _ = c.Network.Inventory(ctx)
 	return c.request(ctx, "POST", "/heartbeat", r, nil)
 }

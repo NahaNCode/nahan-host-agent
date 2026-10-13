@@ -1,10 +1,12 @@
 # NahaN Host Agent
 
-Small, panel-connected Linux agent for **managed IPv4 GRE links**. Independent
+Panel-connected Linux host agent for **server observability and scoped infrastructure management**. Independent
 from the NahaN proxy core. Maintained by **NahaN** <nahancode@gmail.com>.
 
-Version 0.1 is an initial implementation, not a general remote shell or server
-management platform. Requires Linux, iproute2, ping and systemd. No inbound
+Version 0.2 provides IPv4/IPv6 interface inventory, per-interface traffic counters,
+uptime and managed IPv4 GRE links. Additional management capabilities are planned,
+not implied by the project name. It is not a remote shell. Requires Linux,
+iproute2, ping and systemd. No inbound
 management port is opened. The agent polls the NahaN panel over verified HTTPS
 using a separate, revocable host credential. This release uses bearer tokens,
 not mutual TLS. Do not use HTTP or disable certificate verification.
@@ -71,6 +73,7 @@ files during active operations.
 - [راهنمای فارسی](docs/README.fa.md)
 - [Control protocol](docs/protocol.md)
 - [Security and limitations](SECURITY.md)
+- [Architecture and roadmap](docs/architecture.md)
 
 ## License
 

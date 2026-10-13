@@ -19,6 +19,10 @@ A stale manifest or in-place technical mutation is refused. Heartbeat includes
 `peerAlive`, and a sanitized operation `error`. Peer reachability is not an
 apply acknowledgment; a link can be locally applied and have a failing peer.
 
+Version 0.2 additionally sends optional telemetry schemaVersion 1; see
+[architecture](architecture.md). Older agents may omit it and still reconcile
+GRE. Deploy the compatible panel before upgrading agents.
+
 The panel must treat reports older than one minute as stale, never healthy.
 Revoking a credential prevents new control requests but does not erase local
 network resources. This version does not accept arbitrary host commands,
