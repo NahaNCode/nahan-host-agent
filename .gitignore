@@ -1,0 +1,7 @@
+/nahan-host-agent
+/config.json
+/agent.key
+/state.json
+/dist/
+*.pem
+*.key
