@@ -3,13 +3,16 @@
 Panel-connected Linux host agent for **server observability and scoped infrastructure management**. Independent
 from the NahaN proxy core. Maintained by **NahaN** <nahancode@gmail.com>.
 
-Version 0.2 provides IPv4/IPv6 interface inventory, per-interface traffic counters,
+Version 0.3 provides IPv4/IPv6 interface inventory, per-interface traffic counters,
 uptime and managed IPv4 GRE links. Additional management capabilities are planned,
 not implied by the project name. It is not a remote shell. Requires Linux,
 iproute2, ping and systemd. No inbound
 management port is opened. The agent polls the NahaN panel over verified HTTPS
 using a separate, revocable host credential. This release uses bearer tokens,
 not mutual TLS. Do not use HTTP or disable certificate verification.
+Public HTTPS remains primary; direct IP fallback verifies the private NahaN CA
+and fixed control identity. See [private control TLS](docs/private-control-tls.md)
+for source installation, endpoint expansion, key custody and rotation limitations.
 
 ## Quick Interactive Install
 

@@ -15,6 +15,8 @@ import (
 
 func main() {
 	path := flag.String("config", "/etc/nahan-host-agent/config.json", "Enrollment package")
+	check := flag.Bool("check-enrollment", false, "verify enrollment only; no state or network changes")
+	checkRoute := flag.Int("check-route", 0, "with --check-enrollment: 1 or 2 verifies a specific private endpoint")
 	flag.Parse()
 	b, e := os.ReadFile(*path)
 	if e != nil {
@@ -27,6 +29,17 @@ func main() {
 	c, e := agent.New(cfg)
 	if e != nil {
 		log.Fatal(e)
+	}
+	if *check {
+		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
+		defer cancel()
+		m, e := c.CheckEnrollment(ctx, *checkRoute)
+		if e != nil {
+			log.Fatal(e)
+		}
+		json.NewEncoder(os.Stdout).Encode(map[string]any{"revision": m.Revision, "managedLinks": len(m.Tunnels), "endpointSetVersion": agent.EndpointSetVersion})
+		log.Print("enrollment verified; no host settings changed")
+		return
 	}
 	if e = os.MkdirAll(filepath.Dir(cfg.StateFile), 0700); e != nil {
 		log.Fatal("state directory unavailable")

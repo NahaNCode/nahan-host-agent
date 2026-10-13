@@ -2,17 +2,19 @@
 set -euo pipefail
 umask 077
 
-VERSION=0.2.0
+VERSION=0.3.0
 ROOT=https://github.com/NahaNCode/nahan-host-agent/releases/download/v$VERSION
 check=false
 config_path=
 key_path=
+binary_path=
 while (($#)); do
   case "$1" in
     --check) check=true; shift ;;
     --config) config_path="${2:?Missing config path}"; shift 2 ;;
     --key-file) key_path="${2:?Missing key path}"; shift 2 ;;
-    --help) printf 'NahaN installer: [--check] [--config FILE] [--key-file FILE]\n'; exit 0 ;;
+    --binary) binary_path="${2:?Missing local binary path}"; shift 2 ;;
+    --help) printf 'NahaN installer: [--check] [--config FILE] [--key-file FILE] [--binary LOCALLY_BUILT_FILE]\n'; exit 0 ;;
     *) printf 'Unknown option: %s\n' "$1" >&2; exit 1 ;;
   esac
 done
@@ -20,8 +22,8 @@ fail() { printf 'Error: %s\n' "$1" >&2; exit 1; }
 [[ $(uname -s) == Linux ]] || fail 'Linux is required.'
 $check || [[ $EUID == 0 ]] || fail 'Run the installer with sudo.'
 case "$(uname -m)" in
-  x86_64) arch=amd64; hash=b20e237017686dacc853c75c9aaae9f6a4af3835f9e474fbae1eaf1225acd70d ;;
-  aarch64|arm64) arch=arm64; hash=d42b9c18f7258de2be267c797d0fd8f2bb1c5e6a39093c7338fe5feba45adda8 ;;
+  x86_64) arch=amd64; hash=62859d8e7e54587a89ed94a2c86fad5d35ef999b0f9a908d5693e9d32b7a3561 ;;
+  aarch64|arm64) arch=arm64; hash=971e0b5abd847e5931fc1f091ed84ade94eea3318ab50db1499cfc58179a15e6 ;;
   *) fail 'Supported architectures: AMD64 and ARM64.' ;;
 esac
 work=$(mktemp -d)
@@ -83,19 +85,25 @@ fi
 printf '%s\n' "$token" > "$work/agent.key"
 printf 'Authorization: Bearer %s\n' "$token" > "$work/headers"
 unset token
-printf 'Checking panel enrollment…\n'
-curl --proto '=https' --tlsv1.2 --fail --silent --show-error --connect-timeout 10 --max-time 30 \
-  --header "@$work/headers" "$panel/core/v1/hosts/$id/manifest" -o "$work/manifest.json" ||
-  fail 'Panel enrollment could not be verified. No installation changes were made.'
-jq -e '(.revision|type=="number") and (.tunnels|type=="array")' "$work/manifest.json" >/dev/null ||
-  fail 'Unexpected panel response.'
-count=$(jq '.tunnels|length' "$work/manifest.json")
-printf 'Downloading verified %s release…\n' "$arch"
+if [[ -n $binary_path ]]; then
+  [[ -f $binary_path && -x $binary_path ]] || fail 'Locally built executable not found.'
+  printf 'Using explicitly supplied locally built executable. Trust its reviewed source.\n'
+  cp -- "$binary_path" "$work/agent"
+else
+  printf 'Downloading verified %s release…\n' "$arch"
 curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL --connect-timeout 10 --max-time 180 \
   "$ROOT/nahan-host-agent-linux-$arch" -o "$work/agent"
 printf '%s  %s\n' "$hash" "$work/agent" | sha256sum --check --status ||
   fail 'Release checksum mismatch; installation refused.'
-if $check; then printf 'CHECK PASSED: enrollment and pinned release checksum verified; no host settings changed.\n'; exit 0; fi
+fi
+chmod 0700 "$work/agent"
+jq --arg token "$work/agent.key" --arg state "$work/state.json" '.tokenFile=$token | .stateFile=$state' "$work/config.json" > "$work/check.json"
+printf 'Checking enrollment: public HTTPS, then verified private-CA IP routes…\n'
+"$work/agent" --config "$work/check.json" --check-enrollment > "$work/check-result.json" ||
+  fail 'Panel enrollment could not be verified. No installation changes were made.'
+jq -e '(.revision|type=="number") and (.managedLinks|type=="number")' "$work/check-result.json" >/dev/null || fail 'Unexpected enrollment check response.'
+count=$(jq '.managedLinks' "$work/check-result.json")
+if $check; then printf 'CHECK PASSED: enrollment and executable verified; no host settings changed.\n'; exit 0; fi
 [[ -d /run/systemd/system ]] || fail 'A running systemd host is required.'
 printf '\n3/3 Install/start this agent? %s managed link(s) are requested by the panel.\n' "$count" > /dev/tty
 printf 'Only NahaN-owned GRE interfaces may be reconciled. Existing GREs/default routes are protected. [y/N] ' > /dev/tty

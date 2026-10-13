@@ -4,4 +4,5 @@
 /state.json
 /dist/
 *.pem
+!/internal/agent/control-root.pem
 *.key

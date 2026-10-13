@@ -15,13 +15,14 @@ import (
 	"time"
 )
 
-const Version = "0.2.0"
+const Version = "0.3.0"
 
 type Config struct {
-	Panel     string `json:"panel"`
-	ID        string `json:"id"`
-	TokenFile string `json:"tokenFile"`
-	StateFile string `json:"stateFile"`
+	Panel     string   `json:"panel"`
+	ID        string   `json:"id"`
+	TokenFile string   `json:"tokenFile"`
+	StateFile string   `json:"stateFile"`
+	DirectIPs []string `json:"directIPs,omitempty"`
 }
 type Manifest struct {
 	Revision int64    `json:"revision"`
@@ -40,10 +41,13 @@ type Report struct {
 	Telemetry *Telemetry `json:"telemetry,omitempty"`
 }
 type Client struct {
-	Config  Config
-	HTTP    *http.Client
-	Network Network
-	State   Manifest
+	Config       Config
+	HTTP         *http.Client
+	Network      Network
+	State        Manifest
+	directHTTP   []*http.Client
+	preferred    int
+	primaryRetry time.Time
 }
 
 func New(c Config) (*Client, error) {
@@ -51,7 +55,11 @@ func New(c Config) (*Client, error) {
 	if e != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || !UUID(c.ID) || !filepath.IsAbs(c.TokenFile) || !filepath.IsAbs(c.StateFile) {
 		return nil, errors.New("invalid enrollment configuration")
 	}
-	return &Client{Config: c, HTTP: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("redirect refused") }}, Network: Network{ExecRunner{}}}, nil
+	clients, e := directClients(u, c.DirectIPs)
+	if e != nil {
+		return nil, e
+	}
+	return &Client{Config: c, HTTP: controlHTTP(nil), directHTTP: clients, Network: Network{ExecRunner{}}}, nil
 }
 func (c *Client) request(ctx context.Context, method, path string, body any, out any) error {
 	token, e := os.ReadFile(c.Config.TokenFile)
@@ -65,24 +73,104 @@ func (c *Client) request(ctx context.Context, method, path string, body any, out
 			return e
 		}
 	}
-	req, e := http.NewRequestWithContext(ctx, method, strings.TrimRight(c.Config.Panel, "/")+"/core/v1/hosts/"+c.Config.ID+path, bytes.NewReader(b))
-	if e != nil {
-		return e
+	credential := strings.TrimSpace(string(token))
+	if !validCredential(credential) {
+		return errors.New("invalid credential")
 	}
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(token)))
-	req.Header.Set("Content-Type", "application/json")
-	resp, e := c.HTTP.Do(req)
-	if e != nil {
-		return errors.New("panel connection failed")
+	clients := append([]*http.Client{c.HTTP}, c.directHTTP...)
+	order := []int{0}
+	if c.preferred > 0 && time.Now().Before(c.primaryRetry) {
+		order = []int{c.preferred}
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return errors.New("panel refused request")
+	for i := 1; i < len(clients); i++ {
+		if i != order[0] {
+			order = append(order, i)
+		}
 	}
-	if out != nil {
-		return json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(out)
+	for _, index := range order {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		req, e := http.NewRequestWithContext(ctx, method, strings.TrimRight(c.Config.Panel, "/")+"/core/v1/hosts/"+c.Config.ID+path, bytes.NewReader(b))
+		if e != nil {
+			return e
+		}
+		req.Header.Set("Authorization", "Bearer "+credential)
+		if index > 0 && req.URL.Hostname() == "pwaapi.nahanvpn.com" {
+			req.Host = ControlServerName
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, e := clients[index].Do(req)
+		if e != nil {
+			clients[index].CloseIdleConnections()
+			continue
+		}
+		if resp.StatusCode == 502 || resp.StatusCode == 503 || resp.StatusCode == 504 {
+			resp.Body.Close()
+			continue
+		}
+		if resp.StatusCode != 200 {
+			resp.Body.Close()
+			return errors.New("panel refused request")
+		}
+		data, e := io.ReadAll(io.LimitReader(resp.Body, (1<<20)+1))
+		resp.Body.Close()
+		if e != nil {
+			continue
+		}
+		if len(data) > 1<<20 {
+			return errors.New("panel response too large")
+		}
+		if out != nil {
+			if e = json.Unmarshal(data, out); e != nil {
+				return errors.New("invalid panel response")
+			}
+		}
+		c.preferred = index
+		if index > 0 && !time.Now().Before(c.primaryRetry) {
+			c.primaryRetry = time.Now().Add(time.Minute)
+		}
+		return nil
 	}
-	return nil
+	return errors.New("panel connection failed on all verified routes")
+}
+
+// Verify checks enrollment without loading state, reconciling or reporting.
+func (c *Client) Verify(ctx context.Context) error {
+	_, e := c.CheckEnrollment(ctx, 0)
+	return e
+}
+
+// CheckEnrollment never reconciles interfaces. Route zero uses normal fallback;
+// positive route numbers verify a specific configured private-CA endpoint.
+func (c *Client) CheckEnrollment(ctx context.Context, route int) (Manifest, error) {
+	var m Manifest
+	if route < 0 || route > len(c.directHTTP) {
+		return m, errors.New("invalid verification route")
+	}
+	if route > 0 {
+		original := c.HTTP
+		c.HTTP = c.directHTTP[route-1]
+		originalDirect := c.directHTTP
+		c.directHTTP = nil
+		originalPreferred := c.preferred
+		c.preferred = 0
+		originalPanel := c.Config.Panel
+		u, _ := url.Parse(c.Config.Panel)
+		u.Host = ControlServerName + ":" + u.Port()
+		if u.Port() == "" {
+			u.Host = ControlServerName
+		}
+		c.Config.Panel = u.String()
+		defer func() {
+			c.HTTP = original
+			c.Config.Panel = originalPanel
+			c.directHTTP = originalDirect
+			c.preferred = originalPreferred
+		}()
+	}
+	e := c.request(ctx, "GET", "/manifest", nil, &m)
+	return m, e
 }
 func (c *Client) Load() error {
 	b, e := os.ReadFile(c.Config.StateFile)
