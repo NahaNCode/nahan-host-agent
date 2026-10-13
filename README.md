@@ -11,7 +11,48 @@ management port is opened. The agent polls the NahaN panel over verified HTTPS
 using a separate, revocable host credential. This release uses bearer tokens,
 not mutual TLS. Do not use HTTP or disable certificate verification.
 
-## Connect to NahaN
+## Quick Interactive Install
+
+Register the host in **Network Tunnels → Connect Server**, then choose **Copy and
+Install**. Run this command on that host; it contains no enrollment secret:
+
+```sh
+(work="$(mktemp -d)" && trap 'rm -rf -- "$work"' EXIT && curl --proto '=https' --tlsv1.2 -fsSL --connect-timeout 10 --max-time 60 https://raw.githubusercontent.com/NahaNCode/nahan-host-agent/343b10e60ca79c05f84cfcd89ce59ab287e9a08b/install.sh -o "$work/install.sh" && printf 'cf678b2e4a8ad3a8a9b085089678f68f7a21dfb8d5b84c0934dda1ed3353ef52  %s\n' "$work/install.sh" | sha256sum --check --status && sudo bash "$work/install.sh")
+```
+
+The script is pinned to a reviewed commit and checksum, not mutable `main`.
+Review [the installer](https://github.com/NahaNCode/nahan-host-agent/blob/343b10e60ca79c05f84cfcd89ce59ab287e9a08b/install.sh)
+before granting root access. It supports Linux AMD64/ARM64 and running systemd.
+On Debian/Ubuntu it offers to install missing dependencies after confirmation;
+elsewhere install `curl`, `jq`, `iproute2`, `ping` and `coreutils` first.
+
+1. Copy `config.json` in the panel and paste it at the configuration prompt.
+2. Copy `agent.key` and paste it at the **hidden** key prompt. Never put it in
+   the command, URL, shell history or public logs.
+3. The installer verifies panel enrollment and the pinned v0.2.0 binary checksum,
+   reports the requested link count and asks before installing/starting the service.
+
+The key is received from the panel once. Repeated copies are available only while
+the package dialog remains open; closing destroys its in-memory copy. Downloading
+first consumes the key too. Reissue if necessary; it revokes the previous key.
+Clipboard contents are outside the panel's control: clear them after installation.
+Do not use a shared machine or clipboard synchronization for the key.
+
+For downloaded files, use `sudo bash install.sh --config ./config.json --key-file
+./agent.key` after `chmod 600 agent.key`. The installer refuses a different
+installed host identity or orphaned state. Existing state is never deleted.
+Updating the same agent restarts its service, not unrelated GRE links.
+`--check` verifies enrollment and the release without changing host settings:
+
+```sh
+sudo bash install.sh --check --config /etc/nahan-host-agent/config.json --key-file /etc/nahan-host-agent/agent.key
+```
+
+An active service is not proof of a successful tunnel. Wait for the panel heartbeat
+and review each endpoint's probe result. Dependency installation may change system
+packages; canceled enrollment otherwise leaves agent configuration unchanged.
+
+## Manual Installation
 
 1. In **Network Tunnels → Connect Server**, register the server's assigned IPv4.
 2. Download `config.json` and the one-time `agent.key` within ten minutes.
