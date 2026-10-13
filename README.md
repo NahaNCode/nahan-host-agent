@@ -40,7 +40,7 @@ the application validates every operation. See [security](SECURITY.md).
 
 ## Prebuilt binaries
 
-[Release v0.1.0](https://github.com/NahaNCode/nahan-host-agent/releases/tag/v0.1.0)
+[Release v0.2.0](https://github.com/NahaNCode/nahan-host-agent/releases/tag/v0.2.0)
 contains static Linux AMD64 and ARM64 builds and `SHA256SUMS`. Choose the host's
 architecture and verify the downloaded binary's checksum before installing.
 This is an initial pre-release, not general server-management readiness.
