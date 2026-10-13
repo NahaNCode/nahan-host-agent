@@ -12,8 +12,11 @@ not mutual TLS. Do not use HTTP or disable certificate verification.
 ## Connect to NahaN
 
 1. In **Network Tunnels → Connect Server**, register the server's assigned IPv4.
-2. Download the one-time `config.json` and `agent.key` package. Neither file is
-   a proxy-core configuration. Do not reuse a core key or panel login password.
+2. Download `config.json` and the one-time `agent.key` within ten minutes.
+   Downloads are OWNER-authenticated. Pending packages expire on panel restart.
+   Use **Reissue Package** if needed; the old credential then becomes invalid.
+   Neither file is a proxy-core configuration. Do not reuse a core key or panel
+   login password.
 3. Build and install from a reviewed checkout:
 
 ```sh
@@ -32,6 +35,13 @@ The initial installation requires host administrative access. The unit has
 `CAP_NET_ADMIN` and `CAP_NET_RAW`, a read-only filesystem except its state
 directory, and no arbitrary command endpoint. These capabilities are powerful:
 the application validates every operation. See [security](SECURITY.md).
+
+## Prebuilt binaries
+
+[Release v0.1.0](https://github.com/NahaNCode/nahan-host-agent/releases/tag/v0.1.0)
+contains static Linux AMD64 and ARM64 builds and `SHA256SUMS`. Choose the host's
+architecture and verify the downloaded binary's checksum before installing.
+This is an initial pre-release, not general server-management readiness.
 
 ## Manage a link
 
