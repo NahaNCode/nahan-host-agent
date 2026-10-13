@@ -70,6 +70,15 @@ identity. Production holds a unique leaf key and public certificate chain per
 endpoint, not CA signing keys. Initial leaves expire after 90 days; renew and
 reload them before expiry. Monitor certificate expiry operationally.
 
+Offline issuance/renewal helper (refuses to overwrite existing output):
+
+```sh
+bash deploy/private-control/issue-leaf.sh issuer.pem issuer.key passphrase-file new-endpoint-directory
+```
+
+Test configuration before graceful reload and verify each route with
+`--check-enrollment --check-route N`. Keep old endpoint files for rollback.
+
 Back up encrypted CA keys and their passphrase in separately controlled offline
 storage. Local encryption is not a substitute for offline custody. Do not put
 private keys, passphrases or host credentials in git, CI artifacts or logs.
