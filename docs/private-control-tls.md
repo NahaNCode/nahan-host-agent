@@ -100,7 +100,8 @@ authentication remains authoritative. Admin endpoints and arbitrary URL proxying
 are not available. No new firewall exception or canceled control relay is needed.
 The two addresses are on one machine, so they do not provide host-level HA.
 
-Templates: `deploy/private-control/nginx.conf`, `apache.conf`. The Apache/LiteSpeed
-include must survive panel-managed config regeneration; verify it after updates.
+Endpoint web-server configuration belongs in a private deployment repository,
+not this public source tree. Includes must survive panel-managed config
+regeneration; verify them after updates.
 Rollback removes only the new control virtual hosts and restores the previous
 agent binary. Do not change GRE interfaces, routes, public certificates or keys.
