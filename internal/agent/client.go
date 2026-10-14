@@ -15,14 +15,15 @@ import (
 	"time"
 )
 
-const Version = "0.3.0"
+const Version = "0.4.0"
 
 type Config struct {
-	Panel     string   `json:"panel"`
-	ID        string   `json:"id"`
-	TokenFile string   `json:"tokenFile"`
-	StateFile string   `json:"stateFile"`
-	DirectIPs []string `json:"directIPs,omitempty"`
+	PlacementSocket string   `json:"placementSocket,omitempty"`
+	Panel           string   `json:"panel"`
+	ID              string   `json:"id"`
+	TokenFile       string   `json:"tokenFile"`
+	StateFile       string   `json:"stateFile"`
+	DirectIPs       []string `json:"directIPs,omitempty"`
 }
 type Manifest struct {
 	Revision int64    `json:"revision"`
@@ -35,12 +36,14 @@ type Receipt struct {
 	Error     string `json:"error"`
 }
 type Report struct {
-	Version   string     `json:"version"`
-	Revision  int64      `json:"revision"`
-	Results   []Receipt  `json:"results"`
-	Telemetry *Telemetry `json:"telemetry,omitempty"`
+	PlacementKey string     `json:"placementKey,omitempty"`
+	Version      string     `json:"version"`
+	Revision     int64      `json:"revision"`
+	Results      []Receipt  `json:"results"`
+	Telemetry    *Telemetry `json:"telemetry,omitempty"`
 }
 type Client struct {
+	Placement    *PlacementSigner
 	Config       Config
 	HTTP         *http.Client
 	Network      Network
@@ -290,5 +293,8 @@ func (c *Client) Tick(ctx context.Context) error {
 	}
 	// An unavailable inventory must not interrupt GRE reconciliation or heartbeats.
 	r.Telemetry, _ = c.Network.Inventory(ctx)
+	if c.Placement != nil {
+		r.PlacementKey = c.Placement.PublicKey()
+	}
 	return c.request(ctx, "POST", "/heartbeat", r, nil)
 }

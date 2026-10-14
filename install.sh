@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 077
 
-VERSION=0.3.0
+VERSION=0.4.0
 ROOT=https://github.com/NahaNCode/nahan-host-agent/releases/download/v$VERSION
 check=false
 config_path=
@@ -22,8 +22,8 @@ fail() { printf 'Error: %s\n' "$1" >&2; exit 1; }
 [[ $(uname -s) == Linux ]] || fail 'Linux is required.'
 $check || [[ $EUID == 0 ]] || fail 'Run the installer with sudo.'
 case "$(uname -m)" in
-  x86_64) arch=amd64; hash=62859d8e7e54587a89ed94a2c86fad5d35ef999b0f9a908d5693e9d32b7a3561 ;;
-  aarch64|arm64) arch=arm64; hash=971e0b5abd847e5931fc1f091ed84ade94eea3318ab50db1499cfc58179a15e6 ;;
+  x86_64) arch=amd64; hash=5b5f7c41413d1a6cf35b8b4e73b78b2c2b120e5b22293ed9d0381f1b4633c5ac ;;
+  aarch64|arm64) arch=arm64; hash=9646328ad032a42e76e46587c30e777197f9ca7a978690dc3d3055f9cab72b59 ;;
   *) fail 'Supported architectures: AMD64 and ARM64.' ;;
 esac
 work=$(mktemp -d)
@@ -121,6 +121,7 @@ printf '%s\n' '[Unit]' 'Description=NahaN Host Agent' 'After=network-online.targ
   'Restart=on-failure' 'RestartSec=10' 'User=root' 'UMask=0077' 'NoNewPrivileges=yes' \
   'CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW' 'ProtectSystem=strict' 'ProtectHome=yes' \
   'PrivateTmp=yes' 'ReadWritePaths=/var/lib/nahan-host-agent' \
+  'RuntimeDirectory=nahan-host-placement' 'RuntimeDirectoryMode=0700' 'RuntimeDirectoryPreserve=yes' \
   'RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK' 'ProtectKernelTunables=yes' \
   'ProtectKernelModules=yes' 'ProtectControlGroups=yes' 'LockPersonality=yes' \
   'MemoryDenyWriteExecute=yes' '' '[Install]' 'WantedBy=multi-user.target' > "$work/unit"

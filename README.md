@@ -1,9 +1,26 @@
 # NahaN Host Agent
 
+## Automatic Core Host Reporting
+
+The agent publishes its Ed25519 placement public key through its authenticated
+heartbeat and issues 60-second, core-specific attestations over the root-only
+Unix socket `/run/nahan-host-placement/placement.sock`. Updated native cores use
+this socket automatically; the panel verifies the signature before assigning
+their host. No TCP listener is opened and no enrollment credential is shared.
+Existing conflicting placements are reported, not silently moved.
+
+The signing key remains in the private agent state directory. For a root-running
+containerized core, mount only `/run/nahan-host-placement` read-only at the same
+path. Do not mount the agent state directory or enrollment keys. Mounting the
+socket directory rather than its single file keeps socket replacement visible
+after agent restart. A sandbox without socket access continues normal polling
+but cannot report a verified host; it must not infer placement from public IP.
+Non-root deployments require an explicitly permissioned socket integration.
+
 Panel-connected Linux host agent for **server observability and scoped infrastructure management**. Independent
 from the NahaN proxy core. Maintained by **NahaN** <nahancode@gmail.com>.
 
-Version 0.3 provides IPv4/IPv6 interface inventory, per-interface traffic counters,
+Version 0.4 adds signed automatic core placement to IPv4/IPv6 interface inventory, per-interface traffic counters,
 uptime and managed IPv4 GRE links. Additional management capabilities are planned,
 not implied by the project name. It is not a remote shell. Requires Linux,
 iproute2, ping and systemd. No inbound
@@ -32,7 +49,7 @@ elsewhere install `curl`, `jq`, `iproute2`, `ping` and `coreutils` first.
 1. Copy `config.json` in the panel and paste it at the configuration prompt.
 2. Copy `agent.key` and paste it at the **hidden** key prompt. Never put it in
    the command, URL, shell history or public logs.
-3. The installer verifies the pinned v0.3.0 binary checksum, then checks enrollment
+3. The installer verifies the pinned v0.4.0 binary checksum, then checks enrollment
    through public HTTPS or private-CA direct routes,
    reports the requested link count and asks before installing/starting the service.
 

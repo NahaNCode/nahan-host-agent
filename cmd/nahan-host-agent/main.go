@@ -57,6 +57,12 @@ func main() {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+	closePlacement, e := c.StartPlacement(ctx)
+	if e != nil {
+		log.Print("local placement reporting unavailable")
+	} else {
+		defer closePlacement()
+	}
 	for {
 		tick, cancel := context.WithTimeout(ctx, 45*time.Second)
 		e = c.Tick(tick)
