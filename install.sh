@@ -22,8 +22,8 @@ fail() { printf 'Error: %s\n' "$1" >&2; exit 1; }
 [[ $(uname -s) == Linux ]] || fail 'Linux is required.'
 $check || [[ $EUID == 0 ]] || fail 'Run the installer with sudo.'
 case "$(uname -m)" in
-  x86_64) arch=amd64; hash=5b5f7c41413d1a6cf35b8b4e73b78b2c2b120e5b22293ed9d0381f1b4633c5ac ;;
-  aarch64|arm64) arch=arm64; hash=9646328ad032a42e76e46587c30e777197f9ca7a978690dc3d3055f9cab72b59 ;;
+  x86_64) arch=amd64; hash=296d0708e42dc1834843ec20611f138d730d7cfdc22b709e8cc265e0d7e76196 ;;
+  aarch64|arm64) arch=arm64; hash=41bf73c2909c714635d37abef273676da86434d545b7a908a03c705f470e4d1c ;;
   *) fail 'Supported architectures: AMD64 and ARM64.' ;;
 esac
 work=$(mktemp -d)
