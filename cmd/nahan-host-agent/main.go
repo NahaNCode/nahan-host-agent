@@ -16,6 +16,7 @@ import (
 func main() {
 	path := flag.String("config", "/etc/nahan-host-agent/config.json", "Enrollment package")
 	check := flag.Bool("check-enrollment", false, "verify enrollment only; no state or network changes")
+	restoreIngress := flag.Bool("restore-ingress", false, "restore persisted panel ingress restrictions only, then exit")
 	checkRoute := flag.Int("check-route", 0, "with --check-enrollment: 1 or 2 verifies a specific private endpoint")
 	flag.Parse()
 	b, e := os.ReadFile(*path)
@@ -43,6 +44,12 @@ func main() {
 	}
 	if e = os.MkdirAll(filepath.Dir(cfg.StateFile), 0700); e != nil {
 		log.Fatal("state directory unavailable")
+	}
+	if *restoreIngress {
+		if e = c.Load(); e != nil {
+			log.Fatal("ingress restoration failed")
+		}
+		return
 	}
 	lock, e := os.OpenFile(cfg.StateFile+".lock", os.O_CREATE|os.O_RDWR, 0600)
 	if e != nil {

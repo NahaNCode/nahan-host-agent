@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const Version = "0.4.0"
+const Version = "0.5.0"
 
 type Config struct {
 	PlacementSocket string   `json:"placementSocket,omitempty"`
@@ -26,8 +26,9 @@ type Config struct {
 	DirectIPs       []string `json:"directIPs,omitempty"`
 }
 type Manifest struct {
-	Revision int64    `json:"revision"`
-	Tunnels  []Tunnel `json:"tunnels"`
+	Revision        int64           `json:"revision"`
+	Tunnels         []Tunnel        `json:"tunnels"`
+	IngressPolicies []IngressPolicy `json:"ingressPolicies,omitempty"`
 }
 type Receipt struct {
 	ID        string `json:"id"`
@@ -36,11 +37,13 @@ type Receipt struct {
 	Error     string `json:"error"`
 }
 type Report struct {
-	PlacementKey string     `json:"placementKey,omitempty"`
-	Version      string     `json:"version"`
-	Revision     int64      `json:"revision"`
-	Results      []Receipt  `json:"results"`
-	Telemetry    *Telemetry `json:"telemetry,omitempty"`
+	IngressRuntimeVersion int        `json:"ingressRuntimeVersion"`
+	IngressApplied        bool       `json:"ingressApplied"`
+	PlacementKey          string     `json:"placementKey,omitempty"`
+	Version               string     `json:"version"`
+	Revision              int64      `json:"revision"`
+	Results               []Receipt  `json:"results"`
+	Telemetry             *Telemetry `json:"telemetry,omitempty"`
 }
 type Client struct {
 	Placement    *PlacementSigner
@@ -183,7 +186,15 @@ func (c *Client) Load() error {
 	if e != nil {
 		return e
 	}
-	return json.Unmarshal(b, &c.State)
+	if e = json.Unmarshal(b, &c.State); e != nil {
+		return e
+	}
+	if len(c.State.IngressPolicies) > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return c.Network.ApplyIngress(ctx, c.State.IngressPolicies)
+	}
+	return nil
 }
 func (c *Client) save(m Manifest) error {
 	b, e := json.Marshal(m)
@@ -216,11 +227,12 @@ func (c *Client) save(m Manifest) error {
 	return os.Rename(name, c.Config.StateFile)
 }
 func (c *Client) Reconcile(ctx context.Context, m Manifest) (Report, error) {
-	report := Report{Version: Version, Revision: m.Revision, Results: []Receipt{}}
+	report := Report{Version: Version, Revision: m.Revision, Results: []Receipt{}, IngressRuntimeVersion: 1}
 	if m.Revision < c.State.Revision || len(m.Tunnels) > 32 {
 		return report, errors.New("stale or oversized manifest")
 	}
-	if m.Revision == c.State.Revision && !reflect.DeepEqual(m.Tunnels, c.State.Tunnels) {
+	ingressSame := len(m.IngressPolicies) == 0 && len(c.State.IngressPolicies) == 0 || reflect.DeepEqual(m.IngressPolicies, c.State.IngressPolicies)
+	if m.Revision == c.State.Revision && (!reflect.DeepEqual(m.Tunnels, c.State.Tunnels) || !ingressSame) {
 		return report, errors.New("revision reused with different configuration")
 	}
 	ids := map[string]bool{}
@@ -243,7 +255,13 @@ func (c *Client) Reconcile(ctx context.Context, m Manifest) (Report, error) {
 		}
 	}
 	// Persist the intent first so a restart can still account for partially created resources.
-	union := Manifest{Revision: c.State.Revision, Tunnels: append([]Tunnel{}, m.Tunnels...)}
+	if _, e := ingressRules(m.IngressPolicies); e != nil {
+		return report, e
+	}
+	union := Manifest{Revision: c.State.Revision, Tunnels: append([]Tunnel{}, m.Tunnels...), IngressPolicies: m.IngressPolicies}
+	if len(m.IngressPolicies) == 0 {
+		union.IngressPolicies = c.State.IngressPolicies
+	}
 	for _, old := range c.State.Tunnels {
 		if !ids[old.ID] {
 			union.Tunnels = append(union.Tunnels, old)
@@ -252,6 +270,12 @@ func (c *Client) Reconcile(ctx context.Context, m Manifest) (Report, error) {
 	if e := c.save(union); e != nil {
 		return report, e
 	}
+	if len(m.IngressPolicies) > 0 || len(c.State.IngressPolicies) > 0 {
+		if e := c.Network.ApplyIngress(ctx, m.IngressPolicies); e != nil {
+			return report, e
+		}
+	}
+	report.IngressApplied = true
 	for _, old := range c.State.Tunnels {
 		if !ids[old.ID] {
 			if e := c.Network.Remove(ctx, old); e != nil {
@@ -276,7 +300,7 @@ func (c *Client) Reconcile(ctx context.Context, m Manifest) (Report, error) {
 		if e := c.save(m); e != nil {
 			return report, e
 		}
-		c.State = Manifest{Revision: m.Revision, Tunnels: append([]Tunnel{}, m.Tunnels...)}
+		c.State = Manifest{Revision: m.Revision, Tunnels: append([]Tunnel{}, m.Tunnels...), IngressPolicies: m.IngressPolicies}
 	} else {
 		c.State = union
 	}

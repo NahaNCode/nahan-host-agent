@@ -1,0 +1,19 @@
+[Unit]
+Description=Restore persisted NahaN panel ingress policies
+Before=nahan-host-agent.service
+After=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nahan-host-agent --config /etc/nahan-host-agent/config.json --restore-ingress
+RemainAfterExit=yes
+User=root
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_NET_ADMIN
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target
