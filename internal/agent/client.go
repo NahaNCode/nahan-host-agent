@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const Version = "0.4.0"
+const Version = "0.4.1"
 
 type Config struct {
 	PlacementSocket string   `json:"placementSocket,omitempty"`
@@ -30,10 +30,12 @@ type Manifest struct {
 	Tunnels  []Tunnel `json:"tunnels"`
 }
 type Receipt struct {
-	ID        string `json:"id"`
-	Applied   bool   `json:"applied"`
-	PeerAlive bool   `json:"peerAlive"`
-	Error     string `json:"error"`
+	ID           string `json:"id"`
+	Applied      bool   `json:"applied"`
+	PeerAlive    bool   `json:"peerAlive"`
+	Error        string `json:"error"`
+	HealthMethod string `json:"healthMethod,omitempty"`
+	HealthPort   int    `json:"healthPort,omitempty"`
 }
 type Report struct {
 	PlacementKey string     `json:"placementKey,omitempty"`
@@ -215,12 +217,28 @@ func (c *Client) save(m Manifest) error {
 	}
 	return os.Rename(name, c.Config.StateFile)
 }
+func sameTunnelTechnical(before, after Tunnel) bool {
+	before.PeerTCPPorts = nil
+	after.PeerTCPPorts = nil
+	return reflect.DeepEqual(before, after)
+}
+func sameTunnelTopology(before, after []Tunnel) bool {
+	if len(before) != len(after) {
+		return false
+	}
+	for i := range before {
+		if !sameTunnelTechnical(before[i], after[i]) {
+			return false
+		}
+	}
+	return true
+}
 func (c *Client) Reconcile(ctx context.Context, m Manifest) (Report, error) {
 	report := Report{Version: Version, Revision: m.Revision, Results: []Receipt{}}
 	if m.Revision < c.State.Revision || len(m.Tunnels) > 32 {
 		return report, errors.New("stale or oversized manifest")
 	}
-	if m.Revision == c.State.Revision && !reflect.DeepEqual(m.Tunnels, c.State.Tunnels) {
+	if m.Revision == c.State.Revision && !sameTunnelTopology(m.Tunnels, c.State.Tunnels) {
 		return report, errors.New("revision reused with different configuration")
 	}
 	ids := map[string]bool{}
@@ -237,7 +255,7 @@ func (c *Client) Reconcile(ctx context.Context, m Manifest) (Report, error) {
 	}
 	for _, old := range c.State.Tunnels {
 		for _, t := range m.Tunnels {
-			if old.ID == t.ID && !reflect.DeepEqual(old, t) {
+			if old.ID == t.ID && !sameTunnelTechnical(old, t) {
 				return report, errors.New("in-place technical mutation refused; remove then recreate")
 			}
 		}
@@ -268,7 +286,7 @@ func (c *Client) Reconcile(ctx context.Context, m Manifest) (Report, error) {
 			r.Error = e.Error()
 		} else {
 			r.Applied = true
-			r.PeerAlive = c.Network.Probe(ctx, t)
+			r.PeerAlive, r.HealthMethod, r.HealthPort = c.Network.ProbeWithEvidence(ctx, t)
 		}
 		report.Results = append(report.Results, r)
 	}

@@ -1,5 +1,19 @@
 # NahaN Host Agent
 
+## Tunnel Health (0.4.1)
+
+The panel supplies at most three TCP probe ports belonging to enabled published
+listeners on the peer host. The agent connects to the tunnel's private peer IP,
+binding both the private source address and the exact GRE interface. It never
+retries through the public endpoint or default route. TCP success proves tunnel
+reachability even when ICMP is filtered; ICMP remains a fallback when no TCP probe
+succeeds. Failure of both keeps the tunnel unreachable. This does not replace
+authenticated route preflight or relax fail-closed egress policy.
+
+Heartbeat evidence includes `healthMethod` (`tcp`, `icmp`, `none`) and the TCP
+port, when used. Probe-port changes are metadata, not GRE technical changes:
+existing interfaces, addresses, routes and credentials are preserved on upgrade.
+
 ## Automatic Core Host Reporting
 
 The agent publishes its Ed25519 placement public key through its authenticated

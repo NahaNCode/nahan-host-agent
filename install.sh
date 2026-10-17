@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 077
 
-VERSION=0.4.0
+VERSION=0.4.1
 ROOT=https://github.com/NahaNCode/nahan-host-agent/releases/download/v$VERSION
 check=false
 config_path=
@@ -22,8 +22,8 @@ fail() { printf 'Error: %s\n' "$1" >&2; exit 1; }
 [[ $(uname -s) == Linux ]] || fail 'Linux is required.'
 $check || [[ $EUID == 0 ]] || fail 'Run the installer with sudo.'
 case "$(uname -m)" in
-  x86_64) arch=amd64; hash=296d0708e42dc1834843ec20611f138d730d7cfdc22b709e8cc265e0d7e76196 ;;
-  aarch64|arm64) arch=arm64; hash=41bf73c2909c714635d37abef273676da86434d545b7a908a03c705f470e4d1c ;;
+  x86_64) arch=amd64; hash=de9bb5e3ab8693581eb09adc03b25fd39ecd562d780027f0318976a53b7e8666 ;;
+  aarch64|arm64) arch=arm64; hash=5ebc0c1543159349ce8da91c1a4f78842d29d78e41690020bf9998e4c7fede12 ;;
   *) fail 'Supported architectures: AMD64 and ARM64.' ;;
 esac
 work=$(mktemp -d)

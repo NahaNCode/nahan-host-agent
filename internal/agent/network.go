@@ -5,21 +5,25 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/netip"
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 )
 
 type Tunnel struct {
-	ID     string `json:"id"`
-	Local  string `json:"local"`
-	Remote string `json:"remote"`
-	Inner  string `json:"inner"`
-	Peer   string `json:"peer"`
-	Key    uint32 `json:"key"`
-	MTU    int    `json:"mtu"`
-	TTL    int    `json:"ttl"`
+	ID           string `json:"id"`
+	Local        string `json:"local"`
+	Remote       string `json:"remote"`
+	Inner        string `json:"inner"`
+	Peer         string `json:"peer"`
+	Key          uint32 `json:"key"`
+	MTU          int    `json:"mtu"`
+	TTL          int    `json:"ttl"`
+	PeerTCPPorts []int  `json:"peerTCPPorts,omitempty"`
 }
 type Runner interface {
 	Run(context.Context, string, ...string) ([]byte, error)
@@ -100,6 +104,16 @@ func UUID(s string) bool {
 func Validate(t Tunnel) error {
 	if !UUID(t.ID) || t.Key == 0 || t.MTU < 1280 || t.MTU > 1472 || t.TTL < 1 || t.TTL > 255 {
 		return errors.New("invalid GRE identity or options")
+	}
+	if len(t.PeerTCPPorts) > 3 {
+		return errors.New("too many peer TCP probes")
+	}
+	ports := map[int]bool{}
+	for _, port := range t.PeerTCPPorts {
+		if port < 1 || port > 65535 || ports[port] {
+			return errors.New("invalid peer TCP probe port")
+		}
+		ports[port] = true
 	}
 	a, err := netip.ParseAddr(t.Local)
 	if err != nil || !a.Is4() || !a.IsGlobalUnicast() {
@@ -246,9 +260,53 @@ func (n Network) Remove(ctx context.Context, t Tunnel) error {
 	return e
 }
 func (n Network) Probe(ctx context.Context, t Tunnel) bool {
-	if Validate(t) != nil {
+	alive, _, _ := n.ProbeWithEvidence(ctx, t)
+	return alive
+}
+
+func (ExecRunner) ProbeTCP(ctx context.Context, t Tunnel, port int) bool {
+	if Validate(t) != nil || port < 1 || port > 65535 {
 		return false
 	}
+	inner, _ := netip.ParsePrefix(t.Inner)
+	dialer := net.Dialer{Timeout: 1200 * time.Millisecond, LocalAddr: &net.TCPAddr{IP: net.ParseIP(inner.Addr().String())},
+		Control: func(_, _ string, raw syscall.RawConn) error {
+			var bindErr error
+			err := raw.Control(func(fd uintptr) {
+				bindErr = syscall.SetsockoptString(int(fd), syscall.SOL_SOCKET, syscall.SO_BINDTODEVICE, t.Name())
+			})
+			if err != nil {
+				return err
+			}
+			return bindErr
+		}}
+	connection, err := dialer.DialContext(ctx, "tcp4", net.JoinHostPort(t.Peer, strconv.Itoa(port)))
+	if err != nil {
+		return false
+	}
+	_ = connection.Close()
+	return true
+}
+
+func (n Network) ProbeWithEvidence(ctx context.Context, t Tunnel) (bool, string, int) {
+	if Validate(t) != nil {
+		return false, "none", 0
+	}
+	if prober, ok := n.Runner.(interface {
+		ProbeTCP(context.Context, Tunnel, int) bool
+	}); ok {
+		for _, port := range t.PeerTCPPorts {
+			if ctx.Err() != nil {
+				return false, "none", 0
+			}
+			if prober.ProbeTCP(ctx, t, port) {
+				return true, "tcp", port
+			}
+		}
+	}
 	_, e := n.Runner.Run(ctx, "ping", "-n", "-c", "2", "-W", "2", "-I", t.Name(), t.Peer)
-	return e == nil
+	if e == nil {
+		return true, "icmp", 0
+	}
+	return false, "none", 0
 }
