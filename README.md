@@ -51,11 +51,11 @@ Register the host in **Network Tunnels → Connect Server**, then choose **Copy 
 Install**. Run this command on that host; it contains no enrollment secret:
 
 ```sh
-(work="$(mktemp -d)" && trap 'rm -rf -- "$work"' EXIT && curl --proto '=https' --tlsv1.2 -fsSL --connect-timeout 10 --max-time 60 https://raw.githubusercontent.com/NahaNCode/nahan-host-agent/eee0112dcf5fb828db5c1ca4ec865a530ee3c77a/install.sh -o "$work/install.sh" && printf '05a77fe9ad00390290b5305af7a0cb83e05ab768affe7bfa2e1e31771bade943  %s\n' "$work/install.sh" | sha256sum --check --status && sudo bash "$work/install.sh")
+(work="$(mktemp -d)" && trap 'rm -rf -- "$work"' EXIT && curl --proto '=https' --tlsv1.2 -fsSL --connect-timeout 10 --max-time 60 https://raw.githubusercontent.com/NahaNCode/nahan-host-agent/af595ee9812c234887b8463f7da189e5fe19019a/install.sh -o "$work/install.sh" && printf '76a660ef4780298d3ed6feae8dc217415d56c0516ba859858ae197511772a1e7  %s\n' "$work/install.sh" | sha256sum --check --status && sudo bash "$work/install.sh")
 ```
 
 The script is pinned to a reviewed commit and checksum, not mutable `main`.
-Review [the installer](https://github.com/NahaNCode/nahan-host-agent/blob/eee0112dcf5fb828db5c1ca4ec865a530ee3c77a/install.sh)
+Review [the installer](https://github.com/NahaNCode/nahan-host-agent/blob/af595ee9812c234887b8463f7da189e5fe19019a/install.sh)
 before granting root access. It supports Linux AMD64/ARM64 and running systemd.
 On Debian/Ubuntu it offers to install missing dependencies after confirmation;
 elsewhere install `curl`, `jq`, `iproute2`, `ping` and `coreutils` first.
@@ -63,7 +63,7 @@ elsewhere install `curl`, `jq`, `iproute2`, `ping` and `coreutils` first.
 1. Copy `config.json` in the panel and paste it at the configuration prompt.
 2. Copy `agent.key` and paste it at the **hidden** key prompt. Never put it in
    the command, URL, shell history or public logs.
-3. The installer verifies the pinned v0.4.0 binary checksum, then checks enrollment
+3. The installer verifies the pinned v0.4.1 binary checksum, then checks enrollment
    through public HTTPS or private-CA direct routes,
    reports the requested link count and asks before installing/starting the service.
 
@@ -116,7 +116,7 @@ the application validates every operation. See [security](SECURITY.md).
 
 ## Prebuilt binaries
 
-[Release v0.4.0](https://github.com/NahaNCode/nahan-host-agent/releases/tag/v0.4.0)
+[Release v0.4.1](https://github.com/NahaNCode/nahan-host-agent/releases/tag/v0.4.1)
 contains static Linux AMD64 and ARM64 builds and `SHA256SUMS`. Choose the host's
 architecture and verify the downloaded binary's checksum before installing.
 This is an initial pre-release, not general server-management readiness.
