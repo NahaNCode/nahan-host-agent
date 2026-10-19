@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 077
 
-VERSION=0.4.1
+VERSION=0.5.0
 ROOT=https://github.com/NahaNCode/nahan-host-agent/releases/download/v$VERSION
 check=false
 config_path=
@@ -22,8 +22,8 @@ fail() { printf 'Error: %s\n' "$1" >&2; exit 1; }
 [[ $(uname -s) == Linux ]] || fail 'Linux is required.'
 $check || [[ $EUID == 0 ]] || fail 'Run the installer with sudo.'
 case "$(uname -m)" in
-  x86_64) arch=amd64; hash=de9bb5e3ab8693581eb09adc03b25fd39ecd562d780027f0318976a53b7e8666 ;;
-  aarch64|arm64) arch=arm64; hash=5ebc0c1543159349ce8da91c1a4f78842d29d78e41690020bf9998e4c7fede12 ;;
+  x86_64) arch=amd64; hash=05cf002c8abbecfe01d02a04aa3c99688f9f0efd845efe32300e76134e190ca2 ;;
+  aarch64|arm64) arch=arm64; hash=ef267e16211280b2902721dbc8acea43f5861adcc420672518cbdd28f7bf9fc5 ;;
   *) fail 'Supported architectures: AMD64 and ARM64.' ;;
 esac
 work=$(mktemp -d)
@@ -31,7 +31,7 @@ trap 'unset token; rm -rf -- "$work"' EXIT
 trap 'exit 130' INT TERM
 printf '\nNahaN Host Agent %s\n' "$VERSION"
 missing=()
-for pair in curl:curl jq:jq ip:iproute2 ping:iputils-ping sha256sum:coreutils; do
+for pair in curl:curl jq:jq ip:iproute2 ping:iputils-ping sha256sum:coreutils iptables:iptables sysctl:procps; do
   command -v "${pair%%:*}" >/dev/null || missing+=("${pair#*:}")
 done
 if (("${#missing[@]}")); then
