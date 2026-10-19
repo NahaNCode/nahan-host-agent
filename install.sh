@@ -120,9 +120,9 @@ printf '%s\n' '[Unit]' 'Description=NahaN Host Agent' 'After=network-online.targ
   '' '[Service]' 'ExecStart=/usr/local/bin/nahan-host-agent --config /etc/nahan-host-agent/config.json' \
   'Restart=on-failure' 'RestartSec=10' 'User=root' 'UMask=0077' 'NoNewPrivileges=yes' \
   'CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW' 'ProtectSystem=strict' 'ProtectHome=yes' \
-  'PrivateTmp=yes' 'ReadWritePaths=/var/lib/nahan-host-agent' \
+  'PrivateTmp=yes' 'ReadWritePaths=/var/lib/nahan-host-agent /proc/sys/net/ipv4/conf /run' 'ReadOnlyPaths=/proc/sys /sys' \
   'RuntimeDirectory=nahan-host-placement' 'RuntimeDirectoryMode=0700' 'RuntimeDirectoryPreserve=yes' \
-  'RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK' 'ProtectKernelTunables=yes' \
+  'RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK' 'ProtectKernelTunables=no' \
   'ProtectKernelModules=yes' 'ProtectControlGroups=yes' 'LockPersonality=yes' \
   'MemoryDenyWriteExecute=yes' '' '[Install]' 'WantedBy=multi-user.target' > "$work/unit"
 install -m 0644 "$work/unit" /etc/systemd/system/nahan-host-agent.service

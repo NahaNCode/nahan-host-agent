@@ -102,7 +102,7 @@ func UUID(s string) bool {
 	return true
 }
 func Validate(t Tunnel) error {
-	if !UUID(t.ID) || t.Key == 0 || t.MTU < 1280 || t.MTU > 1472 || t.TTL < 1 || t.TTL > 255 {
+	if !UUID(t.ID) || t.MTU < 1280 || t.MTU > 1472 || t.TTL < 1 || t.TTL > 255 {
 		return errors.New("invalid GRE identity or options")
 	}
 	if len(t.PeerTCPPorts) > 3 {
@@ -227,12 +227,19 @@ func (n Network) Apply(ctx context.Context, t Tunnel) error {
 		return e
 	}
 	if exists {
-		return n.verify(ctx, t)
+		if e = n.verify(ctx, t); e != nil {
+			return e
+		}
+		return n.configureGRE(ctx, t)
 	}
 	if e = n.conflict(ctx, t); e != nil {
 		return e
 	}
-	args := []string{"tunnel", "add", t.Name(), "mode", "gre", "local", t.Local, "remote", t.Remote, "key", fmt.Sprint(t.Key), "ttl", fmt.Sprint(t.TTL)}
+	args := []string{"tunnel", "add", t.Name(), "mode", "gre", "local", t.Local, "remote", t.Remote}
+	if t.Key != 0 {
+		args = append(args, "key", fmt.Sprint(t.Key))
+	}
+	args = append(args, "ttl", fmt.Sprint(t.TTL))
 	if _, e = n.Runner.Run(ctx, "ip", args...); e != nil {
 		return errors.New("GRE creation failed")
 	}
@@ -246,7 +253,45 @@ func (n Network) Apply(ctx context.Context, t Tunnel) error {
 			return fail()
 		}
 	}
+	if e = n.configureGRE(ctx, t); e != nil {
+		_ = n.removeGRERule(ctx, t)
+		return fail()
+	}
 	return nil
+}
+
+func greRule(t Tunnel) []string {
+	return []string{"INPUT", "-p", "gre", "-s", t.Remote, "-d", t.Local, "-m", "comment", "--comment", "nahan-gre:" + t.ID, "-j", "ACCEPT"}
+}
+
+// Only the keyless document profile manages host GRE admission. Legacy keyed
+// interfaces remain untouched until an explicitly staged migration replaces them.
+func (n Network) configureGRE(ctx context.Context, t Tunnel) error {
+	if t.Key != 0 {
+		return nil
+	}
+	if _, e := n.Runner.Run(ctx, "sysctl", "-q", "-w", "net.ipv4.conf.all.rp_filter=0", "net.ipv4.conf."+t.Name()+".rp_filter=0"); e != nil {
+		return errors.New("GRE reverse-path filter setup failed")
+	}
+	rule := greRule(t)
+	if _, e := n.Runner.Run(ctx, "iptables", append([]string{"-w", "5", "-C"}, rule...)...); e != nil {
+		if _, e = n.Runner.Run(ctx, "iptables", append([]string{"-w", "5", "-I"}, rule...)...); e != nil {
+			return errors.New("GRE admission rule setup failed")
+		}
+	}
+	return nil
+}
+
+func (n Network) removeGRERule(ctx context.Context, t Tunnel) error {
+	if t.Key != 0 {
+		return nil
+	}
+	rule := greRule(t)
+	if _, e := n.Runner.Run(ctx, "iptables", append([]string{"-w", "5", "-C"}, rule...)...); e != nil {
+		return nil
+	}
+	_, e := n.Runner.Run(ctx, "iptables", append([]string{"-w", "5", "-D"}, rule...)...)
+	return e
 }
 func (n Network) Remove(ctx context.Context, t Tunnel) error {
 	if e := Validate(t); e != nil {
@@ -254,6 +299,9 @@ func (n Network) Remove(ctx context.Context, t Tunnel) error {
 	}
 	exists, e := n.owned(ctx, t)
 	if e != nil || !exists {
+		return e
+	}
+	if e = n.removeGRERule(ctx, t); e != nil {
 		return e
 	}
 	_, e = n.Runner.Run(ctx, "ip", "link", "del", "dev", t.Name())

@@ -49,6 +49,18 @@ func TestIsolatedKernelLifecycle(t *testing.T) {
 	if !bytes.Equal(before, run("-j", "-4", "route", "show")) {
 		t.Fatal("routes not restored")
 	}
+	s.Key, s.TTL = 0, 255
+	run("address", "add", "192.0.2.2/24", "dev", "wan")
+	s.Local = "192.0.2.2"
+	if e := n.Apply(ctx, s); e != nil {
+		t.Fatalf("keyless: %v", e)
+	}
+	if e := n.Apply(ctx, s); e != nil {
+		t.Fatalf("keyless idempotence: %v", e)
+	}
+	if e := n.Remove(ctx, s); e != nil {
+		t.Fatalf("keyless removal: %v", e)
+	}
 	overlap := s
 	overlap.Inner = "10.146.0.1/30"
 	overlap.Peer = "10.146.0.2"

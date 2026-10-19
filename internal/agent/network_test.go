@@ -40,12 +40,31 @@ func TestValidation(t *testing.T) {
 	if Validate(s) != nil {
 		t.Fatal("sample invalid")
 	}
-	for _, edit := range []func(*Tunnel){func(s *Tunnel) { s.ID = "../../etc" }, func(s *Tunnel) { s.Key = 0 }, func(s *Tunnel) { s.Inner = "10.240.0.0/30" }, func(s *Tunnel) { s.Local = ";reboot" }, func(s *Tunnel) { s.Peer = "10.240.0.3" }} {
+	for _, edit := range []func(*Tunnel){func(s *Tunnel) { s.ID = "../../etc" }, func(s *Tunnel) { s.Inner = "10.240.0.0/30" }, func(s *Tunnel) { s.Local = ";reboot" }, func(s *Tunnel) { s.Peer = "10.240.0.3" }} {
 		x := s
 		edit(&x)
 		if Validate(x) == nil {
 			t.Fatal("unsafe input accepted")
 		}
+	}
+}
+
+func TestKeylessDocumentProfile(t *testing.T) {
+	s := sample()
+	s.Key, s.TTL = 0, 255
+	f := &fakeRunner{}
+	if e := (Network{f}).Apply(context.Background(), s); e != nil {
+		t.Fatal(e)
+	}
+	want := []string{"ip", "tunnel", "add", s.Name(), "mode", "gre", "local", s.Local, "remote", s.Remote, "ttl", "255"}
+	creation, filter, admission := false, false, false
+	for _, call := range f.calls {
+		creation = creation || reflect.DeepEqual(call, want)
+		filter = filter || reflect.DeepEqual(call, []string{"sysctl", "-q", "-w", "net.ipv4.conf.all.rp_filter=0", "net.ipv4.conf." + s.Name() + ".rp_filter=0"})
+		admission = admission || reflect.DeepEqual(call, append([]string{"iptables", "-w", "5", "-C"}, greRule(s)...))
+	}
+	if !creation || !filter || !admission {
+		t.Fatalf("incomplete keyless setup: %v", f.calls)
 	}
 }
 func TestForeignOwnership(t *testing.T) {

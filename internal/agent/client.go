@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const Version = "0.4.2"
+const Version = "0.5.0"
 
 type Config struct {
 	PlacementSocket string   `json:"placementSocket,omitempty"`
