@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,7 +16,7 @@ import (
 	"time"
 )
 
-const Version = "0.4.1"
+const Version = "0.4.2"
 
 type Config struct {
 	PlacementSocket string   `json:"placementSocket,omitempty"`
@@ -30,12 +31,13 @@ type Manifest struct {
 	Tunnels  []Tunnel `json:"tunnels"`
 }
 type Receipt struct {
-	ID           string `json:"id"`
-	Applied      bool   `json:"applied"`
-	PeerAlive    bool   `json:"peerAlive"`
-	Error        string `json:"error"`
-	HealthMethod string `json:"healthMethod,omitempty"`
-	HealthPort   int    `json:"healthPort,omitempty"`
+	ID           string         `json:"id"`
+	Applied      bool           `json:"applied"`
+	PeerAlive    bool           `json:"peerAlive"`
+	Error        string         `json:"error"`
+	HealthMethod string         `json:"healthMethod,omitempty"`
+	HealthPort   int            `json:"healthPort,omitempty"`
+	Probe        *ProbeEvidence `json:"probe,omitempty"`
 }
 type Report struct {
 	PlacementKey string     `json:"placementKey,omitempty"`
@@ -45,14 +47,18 @@ type Report struct {
 	Telemetry    *Telemetry `json:"telemetry,omitempty"`
 }
 type Client struct {
-	Placement    *PlacementSigner
-	Config       Config
-	HTTP         *http.Client
-	Network      Network
-	State        Manifest
-	directHTTP   []*http.Client
-	preferred    int
-	primaryRetry time.Time
+	Placement           *PlacementSigner
+	Config              Config
+	HTTP                *http.Client
+	Network             Network
+	State               Manifest
+	directHTTP          []*http.Client
+	preferred           int
+	primaryRetry        time.Time
+	probeSelection      map[string]probeSelection
+	probeWindow         time.Time
+	probeCount          int
+	probeJournalWarning time.Time
 }
 
 func New(c Config) (*Client, error) {
@@ -286,7 +292,12 @@ func (c *Client) Reconcile(ctx context.Context, m Manifest) (Report, error) {
 			r.Error = e.Error()
 		} else {
 			r.Applied = true
-			r.PeerAlive, r.HealthMethod, r.HealthPort = c.Network.ProbeWithEvidence(ctx, t)
+			r.PeerAlive, r.HealthMethod, r.HealthPort, r.Probe = c.Network.ProbeDetailed(ctx, t)
+			c.selectProbe(&r)
+			if err := c.recordProbe(r); err != nil && time.Since(c.probeJournalWarning) > 10*time.Minute {
+				log.Print("probe evidence journal unavailable")
+				c.probeJournalWarning = time.Now()
+			}
 		}
 		report.Results = append(report.Results, r)
 	}

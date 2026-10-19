@@ -265,8 +265,12 @@ func (n Network) Probe(ctx context.Context, t Tunnel) bool {
 }
 
 func (ExecRunner) ProbeTCP(ctx context.Context, t Tunnel, port int) bool {
+	return (ExecRunner{}).ProbeTCPError(ctx, t, port) == nil
+}
+
+func (ExecRunner) ProbeTCPError(ctx context.Context, t Tunnel, port int) error {
 	if Validate(t) != nil || port < 1 || port > 65535 {
-		return false
+		return errors.New("invalid probe")
 	}
 	inner, _ := netip.ParsePrefix(t.Inner)
 	dialer := net.Dialer{Timeout: 1200 * time.Millisecond, LocalAddr: &net.TCPAddr{IP: net.ParseIP(inner.Addr().String())},
@@ -282,10 +286,10 @@ func (ExecRunner) ProbeTCP(ctx context.Context, t Tunnel, port int) bool {
 		}}
 	connection, err := dialer.DialContext(ctx, "tcp4", net.JoinHostPort(t.Peer, strconv.Itoa(port)))
 	if err != nil {
-		return false
+		return err
 	}
 	_ = connection.Close()
-	return true
+	return nil
 }
 
 func (n Network) ProbeWithEvidence(ctx context.Context, t Tunnel) (bool, string, int) {
