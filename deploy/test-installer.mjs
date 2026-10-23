@@ -43,5 +43,24 @@ else printf 'tampered binary' > "$out"; fi
   chmodSync(key,0o600);
   const tampered=run(valid);assert.notEqual(tampered.status,0);assert.match(tampered.stderr,/checksum mismatch/);
   assert.ok(!tampered.stdout.includes('dummy-test-token'));
+  // Redirect every installed path into the fixture; never read the machine's identity.
+  const installed=join(work,'installed');mkdirSync(installed);
+  const isolated=join(work,'upgrade.sh');
+  writeFileSync(isolated,installer.replaceAll('/etc/nahan-host-agent',installed).replaceAll('/var/lib/nahan-host-agent',join(work,'state')));
+  const upgrade=(...args)=>spawnSync('bash',[isolated,'--check',...args],{encoding:'utf8',env:{...process.env,PATH:bin+':'+process.env.PATH}});
+  let result=upgrade('--upgrade');assert.notEqual(result.status,0);assert.match(result.stderr,/identity is incomplete/);
+  writeFileSync(join(installed,'config.json'),JSON.stringify({...valid,tokenFile:join(installed,'agent.key'),stateFile:join(work,'state/state.json')}),{mode:0o600});
+  result=upgrade();assert.notEqual(result.status,0);assert.match(result.stderr,/identity is incomplete/);
+  writeFileSync(join(installed,'agent.key'),'dummy-test-token-'.repeat(4),{mode:0o600});
+  const localBinary=join(work,'reviewed-agent');
+  writeFileSync(localBinary,'#!/bin/sh\nprintf \'{"revision":2,"managedLinks":1}\\n\'\n',{mode:0o700});
+  for(const args of [[],['--upgrade']]){
+    result=upgrade(...args,'--binary',localBinary);assert.equal(result.status,0,result.stderr);
+    assert.match(result.stdout,/Reusing local config and key/);assert.match(result.stdout,/CHECK PASSED/);
+    assert.ok(!result.stdout.includes('Paste'));assert.ok(!result.stdout.includes('dummy-test-token'));
+  }
+  chmodSync(join(installed,'agent.key'),0o644);result=upgrade('--upgrade','--binary',localBinary);assert.notEqual(result.status,0);assert.match(result.stderr,/chmod 600/);
+  assert.notEqual(upgrade('--upgrade','--config',config).status,0);
+  console.log('PASS upgrade: reuses existing identity without prompts; refuses missing, partial and exposed identity');
   console.log('PASS installer: rejects insecure URLs, exposed key files and tampered binaries without installation');
 } finally {rmSync(work,{recursive:true,force:true});}

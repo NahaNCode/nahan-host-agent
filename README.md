@@ -57,13 +57,13 @@ Register the host in **Network Tunnels → Connect Server**, then choose **Copy 
 Install**. Run this command on that host; it contains no enrollment secret:
 
 ```sh
-(run_root() { if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi; }; work="$(mktemp -d)" && trap 'rm -rf -- "$work"' EXIT && curl --proto '=https' --tlsv1.2 -fsSL --connect-timeout 10 --max-time 60 https://raw.githubusercontent.com/NahaNCode/nahan-host-agent/9191fa1d8f2e2618bcceffe6e2ecb72001268762/install.sh -o "$work/install.sh" && printf '6a22f137c4af666492cffb7f56b72a54e27c9382cd65666a498ab1de44d6d7d2  %s\n' "$work/install.sh" | sha256sum --check --status && run_root bash "$work/install.sh")
+(run_root() { if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi; }; work="$(mktemp -d)" && trap 'rm -rf -- "$work"' EXIT && curl --proto '=https' --tlsv1.2 -fsSL --connect-timeout 10 --max-time 60 https://raw.githubusercontent.com/NahaNCode/nahan-host-agent/d5a062314f347fb62a9e2cb8306f8dbab8e788ea/install.sh -o "$work/install.sh" && printf '20a22a26e20b52a192f960744f6b941718169b4c3b7c26872aee65111d2f707b  %s\n' "$work/install.sh" | sha256sum --check --status && run_root bash "$work/install.sh")
 ```
 
 The script is pinned to a reviewed commit and checksum, not mutable `main`.
 It installs reviewed release **0.5.0**, not an unreviewed future release. Update
 the panel pin and this guide together when approving a new release.
-Review [the installer](https://github.com/NahaNCode/nahan-host-agent/blob/9191fa1d8f2e2618bcceffe6e2ecb72001268762/install.sh)
+Review [the installer](https://github.com/NahaNCode/nahan-host-agent/blob/d5a062314f347fb62a9e2cb8306f8dbab8e788ea/install.sh)
 before granting root access. It supports Linux AMD64/ARM64 and running systemd.
 On Debian/Ubuntu it offers to install missing dependencies after confirmation;
 elsewhere install `curl`, `jq`, `iproute2`, `ping` and `coreutils` first.
@@ -99,12 +99,14 @@ packages; canceled enrollment otherwise leaves agent configuration unchanged.
 
 ### Upgrade an Existing Agent
 
-Download the pinned installer above, verify its checksum, then use the existing
-identity (root can omit `sudo`):
+The standard installer automatically detects an existing installation and
+reuses `/etc/nahan-host-agent/config.json` and `agent.key`. It does not ask you
+to paste them again. To require an existing installation, download the pinned
+installer above, verify its checksum, then run (root can omit `sudo`):
 
 ```sh
-sudo bash install.sh --check --config /etc/nahan-host-agent/config.json --key-file /etc/nahan-host-agent/agent.key
-sudo bash install.sh --config /etc/nahan-host-agent/config.json --key-file /etc/nahan-host-agent/agent.key
+sudo bash install.sh --upgrade --check
+sudo bash install.sh --upgrade
 ```
 
 Do not reissue or rotate the key just to upgrade. Confirm installation, then
@@ -112,6 +114,9 @@ check the new version and fresh host report in the panel. Only the host agent
 restarts; identity and state are preserved. Version 0.4.1 rejects keyless GRE
 with `invalid GRE identity or options` before sending its heartbeat. Upgrade
 to 0.5.0 for this mode; a stale host report does not prove the server is down.
+Missing or incomplete local identity stops the upgrade without requesting new
+credentials or replacing existing state. Explicit file paths remain available
+for first installation and deliberate recovery; do not combine them with `--upgrade`.
 
 ### Build from Source
 

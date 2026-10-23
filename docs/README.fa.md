@@ -55,12 +55,13 @@ fallback استفاده می‌کند؛ اطلاعات ورود هر میزبا�
 بدون کلید، ایجنت هر دو سرور باید `0.5.0` یا جدیدتر باشد. حالت تانل موجود
 بدون ساخت تانل جایگزین تغییر نمی‌کند.
 
-برای ارتقای ایجنت، نصاب بررسی‌شدهٔ README را با تنظیمات و کلید فعلی اجرا کنید؛
-صدور مجدد کلید لازم نیست. ابتدا `--check` و سپس نصب با تأیید خودتان انجام شود:
+نصاب وجود نصب قبلی را تشخیص می‌دهد و تنظیمات و کلید را از فایل‌های محلی خودش
+می‌خواند؛ نیازی به کپی دوباره یا صدور مجدد نیست. برای حالت صریح ارتقا، پس از
+دریافت و بررسی هش نصاب README، ابتدا بررسی و سپس ارتقا را اجرا کنید:
 
 ```sh
-sudo bash install.sh --check --config /etc/nahan-host-agent/config.json --key-file /etc/nahan-host-agent/agent.key
-sudo bash install.sh --config /etc/nahan-host-agent/config.json --key-file /etc/nahan-host-agent/agent.key
+sudo bash install.sh --upgrade --check
+sudo bash install.sh --upgrade
 ```
 
 فقط ایجنت ری‌استارت می‌شود؛ هویت، state و هسته تغییر نمی‌کنند. نسخهٔ `0.4.1`
