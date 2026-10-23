@@ -5,22 +5,34 @@ umask 077
 VERSION=0.5.0
 ROOT=https://github.com/NahaNCode/nahan-host-agent/releases/download/v$VERSION
 check=false
+upgrade=false
 config_path=
 key_path=
 binary_path=
 while (($#)); do
   case "$1" in
     --check) check=true; shift ;;
+    --upgrade) upgrade=true; shift ;;
     --config) config_path="${2:?Missing config path}"; shift 2 ;;
     --key-file) key_path="${2:?Missing key path}"; shift 2 ;;
     --binary) binary_path="${2:?Missing local binary path}"; shift 2 ;;
-    --help) printf 'NahaN installer: [--check] [--config FILE] [--key-file FILE] [--binary LOCALLY_BUILT_FILE]\n'; exit 0 ;;
+    --help) printf 'NahaN installer: [--upgrade] [--check] [--config FILE] [--key-file FILE] [--binary LOCALLY_BUILT_FILE]\nExisting installations reuse their local identity automatically; --upgrade requires it.\n'; exit 0 ;;
     *) printf 'Unknown option: %s\n' "$1" >&2; exit 1 ;;
   esac
 done
 fail() { printf 'Error: %s\n' "$1" >&2; exit 1; }
 [[ $(uname -s) == Linux ]] || fail 'Linux is required.'
 $check || [[ $EUID == 0 ]] || fail 'Run the installer with sudo.'
+if $upgrade; then
+  [[ -z $config_path && -z $key_path ]] || fail '--upgrade uses the installed identity; do not supply config or key paths.'
+fi
+if $upgrade || { [[ -z $config_path && -z $key_path ]] && { [[ -e /etc/nahan-host-agent/config.json ]] || [[ -e /etc/nahan-host-agent/agent.key ]]; }; }; then
+  [[ -f /etc/nahan-host-agent/config.json && -f /etc/nahan-host-agent/agent.key ]] ||
+    fail 'Installed identity is incomplete; restore config.json and agent.key before upgrading. No new key was requested.'
+  config_path=/etc/nahan-host-agent/config.json
+  key_path=/etc/nahan-host-agent/agent.key
+  printf 'Existing installation detected. Reusing local config and key; no credentials need to be pasted.\n'
+fi
 case "$(uname -m)" in
   x86_64) arch=amd64; hash=05cf002c8abbecfe01d02a04aa3c99688f9f0efd845efe32300e76134e190ca2 ;;
   aarch64|arm64) arch=arm64; hash=ef267e16211280b2902721dbc8acea43f5861adcc420672518cbdd28f7bf9fc5 ;;
