@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
-import {mkdtempSync,writeFileSync,chmodSync,rmSync,mkdirSync} from 'node:fs';
+import {mkdtempSync,writeFileSync,chmodSync,rmSync,mkdirSync,readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 
+const installer=readFileSync('install.sh','utf8'),readme=readFileSync('README.md','utf8');
+const version=installer.match(/^VERSION=([0-9.]+)$/m)[1];
+assert.ok(readme.includes(`## Current Release: ${version}`),'README release must match installer');
+assert.ok(readme.includes(`releases/tag/v${version}`),'README release link must match installer');
+assert.ok(readme.includes(createHash('sha256').update(installer).digest('hex')),'README command must verify current installer checksum');
 const work=mkdtempSync(join(tmpdir(),'nahan-installer-test-'));
 try {
   const bin=join(work,'bin');mkdirSync(bin);

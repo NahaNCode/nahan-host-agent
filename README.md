@@ -1,6 +1,12 @@
 # NahaN Host Agent
 
-## Tunnel Health (0.4.1)
+## Current Release: 0.5.0
+
+Version 0.5.0 supports keyed and keyless managed IPv4 GRE, scoped GRE transport
+admission, tunnel probe evidence and signed core-host placement. Both hosts
+need agent 0.5.0 or newer for keyless GRE.
+
+## Tunnel Health
 
 The panel supplies at most three TCP probe ports belonging to enabled published
 listeners on the peer host. The agent connects to the tunnel's private peer IP,
@@ -34,7 +40,7 @@ Non-root deployments require an explicitly permissioned socket integration.
 Panel-connected Linux host agent for **server observability and scoped infrastructure management**. Independent
 from the NahaN proxy core. Maintained by **NahaN** <nahancode@gmail.com>.
 
-Version 0.4 adds signed automatic core placement to IPv4/IPv6 interface inventory, per-interface traffic counters,
+This release includes signed automatic core placement, IPv4/IPv6 interface inventory, per-interface traffic counters,
 uptime and managed IPv4 GRE links. Additional management capabilities are planned,
 not implied by the project name. It is not a remote shell. Requires Linux,
 iproute2, ping and systemd. No inbound
@@ -51,11 +57,13 @@ Register the host in **Network Tunnels → Connect Server**, then choose **Copy 
 Install**. Run this command on that host; it contains no enrollment secret:
 
 ```sh
-(work="$(mktemp -d)" && trap 'rm -rf -- "$work"' EXIT && curl --proto '=https' --tlsv1.2 -fsSL --connect-timeout 10 --max-time 60 https://raw.githubusercontent.com/NahaNCode/nahan-host-agent/af595ee9812c234887b8463f7da189e5fe19019a/install.sh -o "$work/install.sh" && printf '76a660ef4780298d3ed6feae8dc217415d56c0516ba859858ae197511772a1e7  %s\n' "$work/install.sh" | sha256sum --check --status && sudo bash "$work/install.sh")
+(run_root() { if [ "$(id -u)" -eq 0 ]; then "$@"; else sudo "$@"; fi; }; work="$(mktemp -d)" && trap 'rm -rf -- "$work"' EXIT && curl --proto '=https' --tlsv1.2 -fsSL --connect-timeout 10 --max-time 60 https://raw.githubusercontent.com/NahaNCode/nahan-host-agent/9191fa1d8f2e2618bcceffe6e2ecb72001268762/install.sh -o "$work/install.sh" && printf '6a22f137c4af666492cffb7f56b72a54e27c9382cd65666a498ab1de44d6d7d2  %s\n' "$work/install.sh" | sha256sum --check --status && run_root bash "$work/install.sh")
 ```
 
 The script is pinned to a reviewed commit and checksum, not mutable `main`.
-Review [the installer](https://github.com/NahaNCode/nahan-host-agent/blob/af595ee9812c234887b8463f7da189e5fe19019a/install.sh)
+It installs reviewed release **0.5.0**, not an unreviewed future release. Update
+the panel pin and this guide together when approving a new release.
+Review [the installer](https://github.com/NahaNCode/nahan-host-agent/blob/9191fa1d8f2e2618bcceffe6e2ecb72001268762/install.sh)
 before granting root access. It supports Linux AMD64/ARM64 and running systemd.
 On Debian/Ubuntu it offers to install missing dependencies after confirmation;
 elsewhere install `curl`, `jq`, `iproute2`, `ping` and `coreutils` first.
@@ -63,7 +71,7 @@ elsewhere install `curl`, `jq`, `iproute2`, `ping` and `coreutils` first.
 1. Copy `config.json` in the panel and paste it at the configuration prompt.
 2. Copy `agent.key` and paste it at the **hidden** key prompt. Never put it in
    the command, URL, shell history or public logs.
-3. The installer verifies the pinned v0.4.1 binary checksum, then checks enrollment
+3. The installer verifies the pinned v0.5.0 binary checksum, then checks enrollment
    through public HTTPS or private-CA direct routes,
    reports the requested link count and asks before installing/starting the service.
 
@@ -88,6 +96,24 @@ and review each endpoint's probe result. Dependency installation may change syst
 packages; canceled enrollment otherwise leaves agent configuration unchanged.
 
 ## Manual Installation
+
+### Upgrade an Existing Agent
+
+Download the pinned installer above, verify its checksum, then use the existing
+identity (root can omit `sudo`):
+
+```sh
+sudo bash install.sh --check --config /etc/nahan-host-agent/config.json --key-file /etc/nahan-host-agent/agent.key
+sudo bash install.sh --config /etc/nahan-host-agent/config.json --key-file /etc/nahan-host-agent/agent.key
+```
+
+Do not reissue or rotate the key just to upgrade. Confirm installation, then
+check the new version and fresh host report in the panel. Only the host agent
+restarts; identity and state are preserved. Version 0.4.1 rejects keyless GRE
+with `invalid GRE identity or options` before sending its heartbeat. Upgrade
+to 0.5.0 for this mode; a stale host report does not prove the server is down.
+
+### Build from Source
 
 1. In **Network Tunnels → Connect Server**, register the server's assigned IPv4.
 2. Download `config.json` and the one-time `agent.key` within ten minutes.
@@ -116,23 +142,26 @@ the application validates every operation. See [security](SECURITY.md).
 
 ## Prebuilt binaries
 
-[Release v0.4.1](https://github.com/NahaNCode/nahan-host-agent/releases/tag/v0.4.1)
+[Release v0.5.0](https://github.com/NahaNCode/nahan-host-agent/releases/tag/v0.5.0)
 contains static Linux AMD64 and ARM64 builds and `SHA256SUMS`. Choose the host's
 architecture and verify the downloaded binary's checksum before installing.
-This is an initial pre-release, not general server-management readiness.
+This is scoped infrastructure management, not general server-management readiness.
 
 ## Manage a link
 
 Register both hosts, select them in the panel, and choose two unused private
 host addresses in the same /30. Save disabled, review, then apply explicitly.
-The panel allocates a nonzero GRE key so a managed link can coexist with a
-previous unkeyed link between the same hosts. GRE keys identify links; they do
-not encrypt traffic or authenticate peers.
+Choose **GRE key on** for an automatically allocated shared nonzero 32-bit
+identifier, or **off** for plain keyless GRE. Only one keyless GRE per host pair
+is allowed; keyed GRE supports distinct links between the same hosts. The mode
+cannot change in place. GRE keys identify links; they do not encrypt traffic or
+authenticate peers. Use a separate encrypted transport for confidentiality.
 
-Agent operations never change the default route, forwarding sysctls, firewall,
-NAT, proxy configuration or unrelated interfaces. Your provider and firewall
-must already permit GRE (IP protocol 47). A successful peer probe confirms
-inner ICMP reachability, **not SS authentication or Internet egress**.
+Agent operations never change the default route, NAT, proxy configuration or
+unrelated interfaces. Version 0.5.0 manages scoped GRE transport admission;
+provider-level filtering must still permit GRE (IP protocol 47). A successful
+private peer probe confirms reachability, **not SS authentication or Internet
+egress**. See [keyless GRE](docs/keyless-gre.md) for the exact scope.
 
 The interface name is derived from the tunnel UUID and marked with an ownership
 alias. Existing names without matching ownership are refused. Overlapping
